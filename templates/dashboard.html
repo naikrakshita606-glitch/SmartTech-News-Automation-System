@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SmartTech News Dashboard</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: #182230;
+      background: #f3f6fb;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header {
+      background: #101d35;
+      color: white;
+      padding: 24px max(24px, calc((100% - 1120px) / 2));
+    }
+    header p { color: #b9c7dd; margin: 6px 0 0; }
+    main { max-width: 1120px; margin: 28px auto; padding: 0 20px 40px; }
+    .toolbar, .card, .article {
+      background: white;
+      border: 1px solid #e1e7f0;
+      border-radius: 12px;
+      box-shadow: 0 4px 14px #1822300a;
+    }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 20px;
+      margin-bottom: 20px;
+    }
+    .toolbar p { color: #5a6678; margin: 5px 0 0; }
+    .controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+    label { display: grid; gap: 5px; color: #475467; font-size: 13px; }
+    select {
+      min-width: 150px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: white;
+      color: #182230;
+      font: inherit;
+      padding: 11px 12px;
+    }
+    button {
+      border: 0;
+      border-radius: 8px;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 650;
+      padding: 12px 18px;
+    }
+    button:hover { background: #1d4ed8; }
+    button:focus-visible, a:focus-visible { outline: 3px solid #f59e0b; outline-offset: 3px; }
+    .notice { border-radius: 8px; padding: 13px 16px; margin: 0 0 16px; }
+    .success { background: #e8f7ee; color: #176438; }
+    .failure { background: #fff0ed; color: #9d2b1f; }
+    .columns { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 20px; align-items: start; }
+    .card { padding: 20px; margin-bottom: 20px; }
+    h1 { font-size: 24px; margin: 0; }
+    h2 { font-size: 19px; margin: 0 0 16px; }
+    h3 { font-size: 16px; margin: 0 0 8px; line-height: 1.4; }
+    .muted, time { color: #667085; font-size: 13px; }
+    .article { padding: 16px; margin: 12px 0; }
+    .article p { color: #4c586b; line-height: 1.5; margin: 8px 0; }
+    .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #667085; font-size: 13px; }
+    .badge { background: #edf2ff; color: #334da3; border-radius: 20px; padding: 4px 9px; }
+    a { color: #2456c5; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .briefing { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; margin: 0; font: 14px/1.65 "Segoe UI", Arial, sans-serif; }
+    .empty { color: #667085; background: #f8fafc; border-radius: 8px; padding: 16px; }
+    @media (max-width: 760px) {
+      .columns { grid-template-columns: 1fr; }
+      .toolbar { align-items: flex-start; flex-direction: column; }
+      button { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SmartTech News</h1>
+    <p>GNews collection and daily briefing dashboard</p>
+  </header>
+  <main>
+    <section class="toolbar" aria-label="News controls">
+      <div>
+        <strong>News update controls</strong>
+        <p>Fetch once or start automatic updates at a selected interval.</p>
+        <p id="scheduler-status" role="status">
+          {% if scheduler_active %}
+            Automatic refresh is active: every {{ scheduler_interval }}.
+          {% else %}
+            Automatic refresh is stopped.
+          {% endif %}
+        </p>
+      </div>
+      <form action="{{ url_for('dashboard') }}" method="post" class="controls">
+        <label for="interval">Refresh interval
+          <select id="interval" name="interval">
+            {% for interval in intervals %}
+              <option value="{{ interval }}" {% if interval == selected_interval %}selected{% endif %}>Every {{ interval }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button type="submit" name="action" value="start_schedule">Start automatic refresh</button>
+        <button type="submit" name="action" value="fetch_now">Fetch once</button>
+        <button type="submit" name="action" value="stop_schedule" {% if not scheduler_active %}disabled{% endif %}>Stop schedule</button>
+      </form>
+    </section>
+
+    {% if message %}
+      <div class="notice success" role="status">{{ message }}</div>
+    {% endif %}
+    {% if error %}
+      <div class="notice failure" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <div class="columns">
+      <section class="card" aria-labelledby="articles-heading">
+        <h2 id="articles-heading">Latest saved articles</h2>
+        {% if articles %}
+          {% for article in articles %}
+            <article class="article">
+              <h3><a href="{{ article.url }}" target="_blank" rel="noopener noreferrer">{{ article.title }}</a></h3>
+              <div class="meta">
+                <span class="badge">{{ article.category }}</span>
+                <span>{{ article.source }}</span>
+                {% if article.published_at %}
+                  <time>{{ article.published_at.strftime("%Y-%m-%d %H:%M UTC") }}</time>
+                {% endif %}
+              </div>
+              {% if article.description %}
+                <p>{{ article.description }}</p>
+              {% endif %}
+            </article>
+          {% endfor %}
+        {% else %}
+          <p class="empty">No saved articles yet. Select “Fetch news now” to collect the first batch.</p>
+        {% endif %}
+      </section>
+
+      <section class="card" aria-labelledby="briefing-heading">
+        <h2 id="briefing-heading">Latest daily briefing</h2>
+        {% if briefing %}
+          <p class="muted">Generated {{ briefing.generated_at.strftime("%Y-%m-%d %H:%M UTC") }}</p>
+          <pre class="briefing">{{ briefing.text }}</pre>
+        {% else %}
+          <p class="empty">No briefing has been generated yet. Fetch news to create one.</p>
+        {% endif %}
+        <p class="muted">Automatic refresh runs while this app is running. The browser view updates after each scheduled fetch. The configured daily schedule time ({{ schedule_time }}) is informational; choose an interval above to start this dashboard's scheduler.</p>
+      </section>
+    </div>
+  </main>
+  <script>
+    const initialRunId = {{ run_id | tojson }};
+    const statusElement = document.getElementById("scheduler-status");
+
+    async function checkSchedulerStatus() {
+      try {
+        const response = await fetch("{{ url_for('scheduler_status') }}", {
+          cache: "no-store"
+        });
+        if (!response.ok) return;
+        const state = await response.json();
+        if (state.active) {
+          const lastRun = state.last_run
+            ? new Date(state.last_run).toLocaleString()
+            : "waiting for first update";
+          statusElement.textContent = state.last_error
+            ? `Automatic refresh is active: every ${state.interval}. Last update failed: ${state.last_error}`
+            : `Automatic refresh is active: every ${state.interval}. Last update: ${lastRun}.`;
+        } else {
+          statusElement.textContent = "Automatic refresh is stopped.";
+        }
+        if (state.run_id !== initialRunId) {
+          window.location.reload();
+        }
+      } catch (error) {
+        statusElement.textContent = "Could not check scheduler status; retrying.";
+      }
+    }
+
+    window.setInterval(checkSchedulerStatus, 5000);
+  </script>
+</body>
+</html>
